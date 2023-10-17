@@ -93,11 +93,14 @@ _(**Table: 1.7**: Compound GovernorBravoDelegate G2 Audit Scope)_
 | Contracts: 1 | |
 | `CompoundBravoDelegateG2.sol` | `432` |
 | | |
-| Imports: 4 | |
+| Imports: 7 | |
 | `GovernorBravoEvents.sol` | `67` |
 | `GovernorBravoDelegateStorageV2.sol` | `7` |
 | `GovernorBravoDelegateStorageV1.sol` | `60` |
-| `GovernorBravoDelegatorStorage.sol` | `10` |### <h3 id="roles"> 1.7 Roles <h3>
+| `GovernorBravoDelegatorStorage.sol` | `10` |
+| `TimelockInterface.sol` | `33` |
+| `CompInterface.sol` | `6` |
+| `GovernorAlpha.sol` | `4` |
 
 ### <h3 id="roles"> 1.8 Roles <h3>
 
@@ -150,12 +153,26 @@ _(**Table: 1.7**: Compound GovernorBravoDelegate G2 Audit Scope)_
 
   This contract extends GovernorBravoDelegateStorageV1 and adds additional storage variables related to whitelist management. It includes whitelist account expiration timestamps and the whitelist guardian's address.
 
+  - #### TimelockInterface
+
+  This interface defines the functions that can be called on the Timelock contract. The delay function returns the delay period specified in the Timelock contract. The GRACE_PERIOD function returns the grace period specified in the Timelock contract. The acceptAdmin function is used to accept the admin role for the Timelock contract. The queuedTransactions function is used to check whether a transaction with the specified hash has been queued in the Timelock contract. The queueTransaction function is used to add a transaction to the queue in the Timelock contract. The cancelTransaction function is used to cancel a transaction that has been queued in the Timelock contract. The executeTransaction function is used to execute a transaction that has been queued in the Timelock contract.
+
+- #### CompInterface:
+
+  This interface defines the functions that can be called on the COMP token contract. The getPriorVotes function is used to get the number of votes that an account had at a specific block number. This function is used in the governance system of the Compound protocol to determine the voting power of token holders.
+
+- #### GovernorAlpha:
+
+  This interface defines the function that can be called on the GovernorAlpha contract. The proposalCount function returns the total number of proposals (state variable) that have been created in the governance system of the Compound protocol. This function is used to keep track of the number of proposals.
+
 ## <h2 id="review"> 2.0 CONTRACT REVIEW <h2>
 
 The following functions are part of the compound governance contract and are all carefully and thoroghly intertwined for optimum performance.
 
 ### 2.1 initialize():
 
-This function initializes the contract. It is called by the constructor of the contract. The function sets the admin, pending admin, and implementation address. It also sets the initial values for the governance parameters. It also sets the initial values for the whitelist.
+This function initializes the contract. It is a public function with five input parameters: timelock, comp address, votingPeriod, votingDelay, and proposalThreshold. This function is used to initialize the contract during the delegator constructor.
 
-This line defines a public function called initialize with five input parameters: timelock*, comp*, votingPeriod*, votingDelay*, and proposalThreshold\_. This function is used to initialize the contract during the delegator constructor.
+### 2.2 propose():
+
+This function creates a new proposal. It is a public function with three input parameters: targers (an array of target addresses), values (an array of Eth values), signatures (an array of function signatures), calldatas (array) and description of the proposal This function is used to create a new proposal.
