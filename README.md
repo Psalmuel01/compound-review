@@ -257,7 +257,11 @@ The following functions are part of the compound governance contract and are all
     }
 ```
 
-This function initializes the contract. It is a public function with five input parameters: timelock*, comp address*, votingPeriod*, votingDelay*, and proposalThreshold*. This function is used to initialize the contract during the delegator constructor. It includes checks to ensure the timelock address is not already set, the caller of the function is the admin address, the timelock* and comp* address are not the null address, the votingPeriod*, votingDelay* and proposalThreshold* parameters are within the valid range of values defined by their min and max constants. It then sets the timelock, comp, votingPeriod, votingDelay, and proposalThreshold variables to the values passed in as arguments to the function
+This function initializes the contract. It is a public function with five input parameters: timelock*, comp address*, votingPeriod*, votingDelay*, and proposalThreshold\*. This function is used to initialize the contract during the delegator constructor.
+
+It includes checks to ensure the timelock address is not already set, the caller of the function is the admin address, the timelock* and comp* address are not the null address, the votingPeriod*, votingDelay* and proposalThreshold\* parameters are within the valid range of values defined by their min and max constants.
+
+It then sets the timelock, comp, votingPeriod, votingDelay, and proposalThreshold variables to the values passed in as arguments to the function
 
 ### 2.2 propose():
 
@@ -307,11 +311,32 @@ This function initializes the contract. It is a public function with five input 
     }
 ```
 
-This function creates a new proposal. It is a public function with three input parameters: targets (an array of target addresses), values (an array of Eth values), signatures (an array of function signatures), calldatas (array) and description of the proposal This function is used to create a new proposal. It includes checks to ensure the Governor Bravo contract is active, the proposer has enough voting power to create a proposal except if whitelisted, the length of the targets, values, signatures, and calldatas arrays are equal. It also ensures the length of the targets array is not empty and not greater than the maximum number of operations allowed in a proposal. After it calculates the start and end blocks of the voting period for the new proposal, based on the current block number, the voting delay, and the voting period, the function then checks whether the proposer has an active or pending proposal, creates a new proposal and set the state variable proposalCount to the proposalCount + 1. Then an event is emitted to signal the creation of the new proposal.
+This function creates a new proposal. It is a public function with three input parameters: targets (an array of target addresses), values (an array of Eth values), signatures (an array of function signatures), calldatas (array) and description of the proposal.
+
+It includes checks to ensure the Governor Bravo contract is active, the proposer has enough voting power to create a proposal except if whitelisted, the length of the targets, values, signatures, and calldatas arrays are equal. It also ensures the length of the targets array is not empty and not greater than the maximum number of operations allowed in a proposal.
+
+After it calculates the start and end blocks of the voting period for the new proposal, based on the current block number, the voting delay, and the voting period, the function then checks whether the proposer has an active or pending proposal, creates a new proposal and set the state variable proposalCount to the proposalCount + 1. Then an event is emitted to signal the creation of the new proposal.
 
 #### 2.3 queue():
 
-This is an external function used to add a proposal to the queue in the Timelock contract. The function takes a single argument, proposalId, which is the ID of the proposal to be queued. The function checks that the proposal with the specified proposalId is in the Succeeded state, retrieves the proposal from the proposals mapping, calculates the earliest time at which the proposal can be executed, and loops through the targets, values, signatures, and calldatas arrays of the proposal to add each action to the queue in the Timelock contract. Finally, the eta value is stored in the eta field of the proposal, and a ProposalQueued event is emitted with the proposalId and eta values as arguments.
+```bash
+      function queue(uint proposalId) external {
+        require(state(proposalId) == ProposalState.Succeeded, "GovernorBravo::queue: proposal can only be queued if it is succeeded");
+        Proposal storage proposal = proposals[proposalId];
+        uint eta = add256(block.timestamp, timelock.delay());
+        for (uint i = 0; i < proposal.targets.length; i++) {
+            queueOrRevertInternal(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i], eta);
+        }
+        proposal.eta = eta;
+        emit ProposalQueued(proposalId, eta);
+    }
+```
+
+This is an external function used to add a proposal to the queue in the Timelock contract. The function takes a single argument, proposalId, which is the ID of the proposal to be queued.
+
+The function checks that the proposal with the specified proposalId is in the Succeeded state, retrieves the proposal from the proposals mapping, calculates the earliest time at which the proposal can be executed, and loops through the targets, values, signatures, and calldatas arrays of the proposal to add each action to the queue in the Timelock contract.
+
+Finally, the eta value is stored in the eta field of the proposal, and a ProposalQueued event is emitted with the proposalId and eta values as arguments.
 
 #### 2.4 queueOrRevertInternal():
 
@@ -322,10 +347,131 @@ This is an external function used to add a proposal to the queue in the Timelock
   }
 ```
 
-This is an internal function that takes five arguments: target, value, signature, data, and eta. This function is used to add a transaction to the queue in the Timelock contract.
+This is an internal function that takes five arguments: target, value, signature, data, and eta. This function is used to add a transaction to the queue in the Timelock contract. The first line of the function checks whether the same transaction has already been queued at the same eta. If the same transaction has already been queued, the function will revert with an error message.
 
-The first line of the function checks whether the same transaction has already been queued at the same eta. If the same transaction has already been queued, the function will revert with an error message.
+The next line of the function calls the queueTransaction function of the Timelock contract to add the transaction to the queue. Overall, it is a helper function that is used to add transactions to the queue in a safe and efficient manner.
 
-The next line of the function calls the queueTransaction function of the Timelock contract to add the transaction to the queue.
+#### 2.5 execute():
 
-Overall, it is a helper function that is used to add transactions to the queue in a safe and efficient manner.
+```bash
+   function execute(uint proposalId) external payable {
+        require(state(proposalId) == ProposalState.Queued, "GovernorBravo::execute: proposal can only be executed if it is queued");
+        Proposal storage proposal = proposals[proposalId];
+        proposal.executed = true;
+        for (uint i = 0; i < proposal.targets.length; i++) {
+            timelock.executeTransaction.value(proposal.values[i])(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i], proposal.eta);
+        }
+        emit ProposalExecuted(proposalId);
+    }
+```
+
+The execute function is a public function that is used to execute a proposal that has been queued in the contract. The function takes a single argument, proposalId, which is the ID of the proposal to be executed. It checks that the proposal with the specified proposalId is in the Queued state.
+
+It retrieves the proposal with the specified proposalId from the proposals mapping, and sets the executed field of the proposal to true. It loops through the targets, values, signatures, and calldatas arrays of the proposal and calls the executeTransaction function in the Timelock contract. Finally, a ProposalExecuted event is emitted with the proposalId as an argument.
+
+#### 2.6 cancel():
+
+```bash
+  function cancel(uint proposalId) external {
+        require(state(proposalId) != ProposalState.Executed, "GovernorBravo::cancel: cannot cancel executed proposal");
+
+        Proposal storage proposal = proposals[proposalId];
+
+        // Proposer can cancel
+        if(msg.sender != proposal.proposer) {
+            // Whitelisted proposers can't be canceled for falling below proposal threshold
+            if(isWhitelisted(proposal.proposer)) {
+                require((comp.getPriorVotes(proposal.proposer, sub256(block.number, 1)) < proposalThreshold) && msg.sender == whitelistGuardian, "GovernorBravo::cancel: whitelisted proposer");
+            }
+            else {
+                require((comp.getPriorVotes(proposal.proposer, sub256(block.number, 1)) < proposalThreshold), "GovernorBravo::cancel: proposer above threshold");
+            }
+        }
+
+        proposal.canceled = true;
+        for (uint i = 0; i < proposal.targets.length; i++) {
+            timelock.cancelTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i], proposal.eta);
+        }
+
+        emit ProposalCanceled(proposalId);
+    }
+```
+
+This is an external function that is used to cancel a proposal that has not yet been executed. The function takes a single argument, proposalId, which is the ID of the proposal to be canceled. It checks that the proposal with the specified proposalId is not in the Executed state. It then checks that the sender of the transaction is either the proposer of the proposal, or the proposer is whitelisted and the sender is the whitelistGuardian. If the sender is the proposer, the function checks that the proposer has fallen below the proposal threshold. If the sender is the whitelistGuardian, the function checks that the proposer has fallen below the proposal threshold and the proposer is whitelisted.
+
+If the checks pass, the function sets the canceled field of the proposal to true, and calls the cancelTransaction function of the Timelock contract to cancel each action in the proposal. Finally, the function emits a ProposalCanceled event with the proposalId value as an argument. Overall, the cancel function plays a critical role in the decentralized governance of the Compound protocol by allowing token holders to cancel proposals that are no longer desirable or feasible.
+
+##### 2.7 getActions():
+
+```bash
+    function getActions(uint proposalId) external view returns (address[] memory targets, uint[] memory values, string[] memory signatures, bytes[] memory calldatas) {
+        Proposal storage p = proposals[proposalId];
+        return (p.targets, p.values, p.signatures, p.calldatas);
+    }
+```
+
+This is a public function that is used to retrieve the targets, values, signatures, and calldatas of a proposal. The function takes a single argument, proposalId, which is the ID of the proposal to be retrieved. It retrieves the proposal with the specified proposalId from the proposals mapping, and returns the targets, values, signatures, and calldatas of the proposal.
+
+##### 2.8 getReceipt():
+
+```bash
+     function getReceipt(uint proposalId, address voter) external view returns (Receipt memory) {
+        return proposals[proposalId].receipts[voter];
+    }
+```
+
+This is a public function that is used to retrieve the receipt of a proposal. The function takes two arguments, proposalId and voter, which are the ID of the proposal and the address of the voter. It retrieves the proposal with the specified proposalId from the proposals mapping, and returns the receipt of the proposal for the specified voter.
+
+##### 2.9 state():
+
+```bash
+     function state(uint proposalId) public view returns (ProposalState) {
+        require(proposalCount >= proposalId && proposalId > initialProposalId, "GovernorBravo::state: invalid proposal id");
+        Proposal storage proposal = proposals[proposalId];
+        if (proposal.canceled) {
+            return ProposalState.Canceled;
+        } else if (block.number <= proposal.startBlock) {
+            return ProposalState.Pending;
+        } else if (block.number <= proposal.endBlock) {
+            return ProposalState.Active;
+        } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < quorumVotes) {
+            return ProposalState.Defeated;
+        } else if (proposal.eta == 0) {
+            return ProposalState.Succeeded;
+        } else if (proposal.executed) {
+            return ProposalState.Executed;
+        } else if (block.timestamp >= add256(proposal.eta, timelock.GRACE_PERIOD())) {
+            return ProposalState.Expired;
+        } else {
+            return ProposalState.Queued;
+        }
+    }
+```
+
+This is a public view function that is used to retrieve the current state of a proposal. The function takes a single argument, proposalId, which is the ID of the proposal to retrieve. It checks that the proposalId is valid by ensuring that it is greater than the initialProposalId and less than or equal to the proposalCount. It then retrieves the proposal with the specified proposalId from the proposals mapping.
+
+If the canceled field of the proposal is true, the function returns the Canceled state. If the block number is less than or equal to the startBlock of the proposal, the function returns the Pending state. If the block number is less than or equal to the endBlock of the proposal, the function returns the Active state. If the number of votes in favor of the proposal is less than or equal to the number of votes against the proposal, or the number of votes in favor of the proposal is less than the quorumVotes threshold, the function returns ProposalState.Defeated. If the eta field of the proposal is 0, the function returns Succeeded state. If the executed field of the proposal is true, the function returns the Executed state. If the block timestamp is greater than or equal to the eta plus the GRACE_PERIOD of the Timelock contract, the function returns the Expired state.
+
+Otherwise, the function returns the Queued state.
+
+#### 2.10 castVote();
+
+```bash
+   function castVote(uint proposalId, uint8 support) external {
+        emit VoteCast(msg.sender, proposalId, support, castVoteInternal(msg.sender, proposalId, support), "");
+    }
+```
+
+This is a public function that is used to cast a vote on a proposal. The function takes two arguments, proposalId and support, which are the ID of the proposal and support, which is a boolean value indicating whether the voter supports (1) or opposes (0) the proposal.
+
+The function emits a VoteCast event with the following parameters:
+
+msg.sender: the address of the voter who cast the vote
+proposalId: the ID of the proposal that was voted on
+support: a boolean value indicating whether the voter supports or opposes the proposal
+castVoteInternal(msg.sender, proposalId, support): the return value of the castVoteInternal function, which is the number of votes that were cast by the voter
+"": an empty string.
+
+The castVoteInternal function is called with the same arguments as the castVote function, and is responsible for actually casting the vote. The castVote function simply emits the VoteCast event and returns the result of the castVoteInternal function.
+
+Overall, the castVote function is a critical part of the Compound governance system, as it allows token holders to cast votes on proposals and participate in the decentralized decision-making process.
