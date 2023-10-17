@@ -1,12 +1,12 @@
-| Client         | Compound Protocol Governance                        |
-| :------------- | :-------------------------------------------------- |
-| Title          | Smart Contract Audit Report                         |
-| Target         | GovernorBravoDelegateG2                             |
-| Version        | 1.0                                                 |
-| Author         | [Samuel Dahunsi](https://github.com/Samuel Dahunsi) |
-| Classification | Public                                              |
-| Status         | Draft                                               |
-| Date Created   | October 17, 2023                                    |
+| Client         | Compound Protocol Governance                    |
+| :------------- | :---------------------------------------------- |
+| Title          | Smart Contract Audit Report                     |
+| Target         | GovernorBravoDelegateG2                         |
+| Version        | 1.0                                             |
+| Author         | [Samuel Dahunsi](https://github.com/psalmuel01) |
+| Classification | Public                                          |
+| Status         | Draft                                           |
+| Date Created   | October 17, 2023                                |
 
 ## Table of contents
 
@@ -23,7 +23,7 @@
   - <a href="#overview"> 1.9 System Overview</a>
 
 - <a href="#review"> 2.0 CONTRACT REVIEW</a>
-- <a href="#findings"> 3.0 FINDINGS</a>
+<!-- - <a href="#findings"> 3.0 FINDINGS</a>
   - <a href="#summary"> 3.1 Summary</a>
   - <a href="#Qanalysis"> 3.2 Qualitative Analysis</a>
   - <a href="#keyF"> 3.3 Key Findings</a>
@@ -33,7 +33,7 @@
   - <a href="#dr3"> 4.3 BetBull/ BetBear Epoch errors could be more specific</a>
   - <a href="#dr4"> 4.4 Redundant State/ code removal in BetBear/BetBull</a>
   - <a href="#dr5"> 4.5 Redundant State/ code removal in Claim() function </a>
-- <a href="#conclusion"> 5.0 CONCLUSION</a>
+- <a href="#conclusion"> 5.0 CONCLUSION</a> -->
 
 <h2 id="dsds">1.0 INTRODUCTION </h2>
 
@@ -158,4 +158,4 @@ The following functions are part of the compound governance contract and are all
 
 This function initializes the contract. It is called by the constructor of the contract. The function sets the admin, pending admin, and implementation address. It also sets the initial values for the governance parameters. It also sets the initial values for the whitelist.
 
-This line defines a public function called initialize with five input parameters: timelock_, comp_, votingPeriod_, votingDelay_, and proposalThreshold_. This function is used to initialize the contract during the delegator constructor.
+This line defines a public function called initialize with five input parameters: timelock*, comp*, votingPeriod*, votingDelay*, and proposalThreshold\_. This function is used to initialize the contract during the delegator constructor.
