@@ -185,6 +185,7 @@ The contract contains the following state constant variables:
 
 ```
     string public constant name = "Compound Governor Bravo";
+    string public constant name = "Compound Governor Bravo";
 ```
 
 This line defines a public constant variable called MAX_PROPOSAL_THRESHOLD with a value of 100,000 multiplied by 10^18. This value represents the maximum proposal threshold that can be set in the governance system of the Compound protocol.
