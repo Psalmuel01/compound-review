@@ -239,12 +239,93 @@ The following functions are part of the compound governance contract and are all
 
 ### 2.1 initialize():
 
+```bash
+  function initialize(address timelock_, address comp_, uint votingPeriod_, uint votingDelay_, uint proposalThreshold_) public {
+        require(address(timelock) == address(0), "GovernorBravo::initialize: can only initialize once");
+        require(msg.sender == admin, "GovernorBravo::initialize: admin only");
+        require(timelock_ != address(0), "GovernorBravo::initialize: invalid timelock address");
+        require(comp_ != address(0), "GovernorBravo::initialize: invalid comp address");
+        require(votingPeriod_ >= MIN_VOTING_PERIOD && votingPeriod_ <= MAX_VOTING_PERIOD, "GovernorBravo::initialize: invalid voting period");
+        require(votingDelay_ >= MIN_VOTING_DELAY && votingDelay_ <= MAX_VOTING_DELAY, "GovernorBravo::initialize: invalid voting delay");
+        require(proposalThreshold_ >= MIN_PROPOSAL_THRESHOLD && proposalThreshold_ <= MAX_PROPOSAL_THRESHOLD, "GovernorBravo::initialize: invalid proposal threshold");
+
+        timelock = TimelockInterface(timelock_);
+        comp = CompInterface(comp_);
+        votingPeriod = votingPeriod_;
+        votingDelay = votingDelay_;
+        proposalThreshold = proposalThreshold_;
+    }
+```
+
 This function initializes the contract. It is a public function with five input parameters: timelock*, comp address*, votingPeriod*, votingDelay*, and proposalThreshold*. This function is used to initialize the contract during the delegator constructor. It includes checks to ensure the timelock address is not already set, the caller of the function is the admin address, the timelock* and comp* address are not the null address, the votingPeriod*, votingDelay* and proposalThreshold* parameters are within the valid range of values defined by their min and max constants. It then sets the timelock, comp, votingPeriod, votingDelay, and proposalThreshold variables to the values passed in as arguments to the function
 
 ### 2.2 propose():
+
+```bash
+  function propose(address[] memory targets, uint[] memory values, string[] memory signatures, bytes[] memory calldatas, string memory description) public returns (uint) {
+        // Reject proposals before initiating as Governor
+        require(initialProposalId != 0, "GovernorBravo::propose: Governor Bravo not active");
+        // Allow addresses above proposal threshold and whitelisted addresses to propose
+        require(comp.getPriorVotes(msg.sender, sub256(block.number, 1)) > proposalThreshold || isWhitelisted(msg.sender), "GovernorBravo::propose: proposer votes below proposal threshold");
+        require(targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length, "GovernorBravo::propose: proposal function information arity mismatch");
+        require(targets.length != 0, "GovernorBravo::propose: must provide actions");
+        require(targets.length <= proposalMaxOperations, "GovernorBravo::propose: too many actions");
+
+        uint latestProposalId = latestProposalIds[msg.sender];
+        if (latestProposalId != 0) {
+          ProposalState proposersLatestProposalState = state(latestProposalId);
+          require(proposersLatestProposalState != ProposalState.Active, "GovernorBravo::propose: one live proposal per proposer, found an already active proposal");
+          require(proposersLatestProposalState != ProposalState.Pending, "GovernorBravo::propose: one live proposal per proposer, found an already pending proposal");
+        }
+
+        uint startBlock = add256(block.number, votingDelay);
+        uint endBlock = add256(startBlock, votingPeriod);
+
+        proposalCount++;
+        Proposal memory newProposal = Proposal({
+            id: proposalCount,
+            proposer: msg.sender,
+            eta: 0,
+            targets: targets,
+            values: values,
+            signatures: signatures,
+            calldatas: calldatas,
+            startBlock: startBlock,
+            endBlock: endBlock,
+            forVotes: 0,
+            againstVotes: 0,
+            abstainVotes: 0,
+            canceled: false,
+            executed: false
+        });
+
+        proposals[newProposal.id] = newProposal;
+        latestProposalIds[newProposal.proposer] = newProposal.id;
+
+        emit ProposalCreated(newProposal.id, msg.sender, targets, values, signatures, calldatas, startBlock, endBlock, description);
+        return newProposal.id;
+    }
+```
 
 This function creates a new proposal. It is a public function with three input parameters: targets (an array of target addresses), values (an array of Eth values), signatures (an array of function signatures), calldatas (array) and description of the proposal This function is used to create a new proposal. It includes checks to ensure the Governor Bravo contract is active, the proposer has enough voting power to create a proposal except if whitelisted, the length of the targets, values, signatures, and calldatas arrays are equal. It also ensures the length of the targets array is not empty and not greater than the maximum number of operations allowed in a proposal. After it calculates the start and end blocks of the voting period for the new proposal, based on the current block number, the voting delay, and the voting period, the function then checks whether the proposer has an active or pending proposal, creates a new proposal and set the state variable proposalCount to the proposalCount + 1. Then an event is emitted to signal the creation of the new proposal.
 
 #### 2.3 queue():
 
-This function is used to add a proposal to the queue in the Timelock contract. The function takes a single argument, proposalId, which is the ID of the proposal to be queued. The function checks that the proposal with the specified proposalId is in the Succeeded state, retrieves the proposal from the proposals mapping, calculates the earliest time at which the proposal can be executed, and loops through the targets, values, signatures, and calldatas arrays of the proposal to add each action to the queue in the Timelock contract. Finally, the eta value is stored in the eta field of the proposal, and a ProposalQueued event is emitted with the proposalId and eta values as arguments.
+This is an external function used to add a proposal to the queue in the Timelock contract. The function takes a single argument, proposalId, which is the ID of the proposal to be queued. The function checks that the proposal with the specified proposalId is in the Succeeded state, retrieves the proposal from the proposals mapping, calculates the earliest time at which the proposal can be executed, and loops through the targets, values, signatures, and calldatas arrays of the proposal to add each action to the queue in the Timelock contract. Finally, the eta value is stored in the eta field of the proposal, and a ProposalQueued event is emitted with the proposalId and eta values as arguments.
+
+#### 2.4 queueOrRevertInternal():
+
+```bash
+  function queueOrRevertInternal(address target, uint value, string memory signature, bytes memory data, uint eta) internal {
+    require(!timelock.queuedTransactions(keccak256(abi.encode(target, value, signature, data, eta))), "GovernorBravo::queueOrRevertInternal: identical proposal action already queued at eta");
+      timelock.queueTransaction(target, value, signature, data, eta);
+  }
+```
+
+This is an internal function that takes five arguments: target, value, signature, data, and eta. This function is used to add a transaction to the queue in the Timelock contract.
+
+The first line of the function checks whether the same transaction has already been queued at the same eta. If the same transaction has already been queued, the function will revert with an error message.
+
+The next line of the function calls the queueTransaction function of the Timelock contract to add the transaction to the queue.
+
+Overall, it is a helper function that is used to add transactions to the queue in a safe and efficient manner.
