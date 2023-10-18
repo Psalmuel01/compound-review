@@ -462,16 +462,245 @@ Otherwise, the function returns the Queued state.
     }
 ```
 
-This is a public function that is used to cast a vote on a proposal. The function takes two arguments, proposalId and support, which are the ID of the proposal and support, which is a boolean value indicating whether the voter supports (1) or opposes (0) the proposal.
+This is an external function that is used to cast a vote on a proposal. The function takes two arguments, proposalId and support, which are the ID of the proposal and support, which is a uint indicating whether the voter opposes (0), supports(1) or abstains(2) the proposal. The function then emits a VoteCast event with the following parameters - msg.sender (the address of the voter who cast the vote), proposalId, support, castVoteInternal(msg.sender, proposalId, support), and "" (an empty string).
 
-The function emits a VoteCast event with the following parameters:
+The castVoteInternal function is called with the same arguments as the castVote function, and is responsible for actually casting the vote. The castVote function simply emits the VoteCast event and returns the result of the castVoteInternal function. Overall, the castVote function is a critical part of the Compound governance system, as it allows token holders to cast votes on proposals and participate in the decentralized decision-making process.
 
-msg.sender: the address of the voter who cast the vote
-proposalId: the ID of the proposal that was voted on
-support: a boolean value indicating whether the voter supports or opposes the proposal
-castVoteInternal(msg.sender, proposalId, support): the return value of the castVoteInternal function, which is the number of votes that were cast by the voter
-"": an empty string.
+##### 2.11 castVoteWithReason():
 
-The castVoteInternal function is called with the same arguments as the castVote function, and is responsible for actually casting the vote. The castVote function simply emits the VoteCast event and returns the result of the castVoteInternal function.
+```bash
+    function castVoteWithReason(uint proposalId, uint8 support, string calldata reason) external {
+        emit VoteCast(msg.sender, proposalId, support, castVoteInternal(msg.sender, proposalId, support), reason);
+    }
+```
 
-Overall, the castVote function is a critical part of the Compound governance system, as it allows token holders to cast votes on proposals and participate in the decentralized decision-making process.
+This is an external function that is used to cast a vote on a proposal with a reason. . The function takes three arguments: proposalId, which is the ID of the proposal to vote on, support, which is a uint indicating whether the voter opposes (0), supports(1) or abstains(2) the proposal, and reason, which is a string that provides a reason for the voter's vote. The function then emits a VoteCast event with the following parameters - msg.sender (the address of the voter who cast the vote), proposalId, support, castVoteInternal(msg.sender, proposalId, support), and reason.
+
+The castVoteInternal function is called with the same arguments as the castVoteWithReason function, and is responsible for actually casting the vote. The castVoteWithReason function simply emits the VoteCast event with the additional reason parameter and returns the result of the castVoteInternal function. The castVoteWithReason function can be useful for providing additional context and transparency around the decision-making process in the Compound governance system.
+
+##### 2.12 castVoteBySig():
+
+```bash
+    function castVoteBySig(uint proposalId, uint8 support, uint8 v, bytes32 r, bytes32 s) external {
+      bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(byte(name)), getChainIdInternal(), address(this)));
+      bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support));
+      bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator,structHash));
+      address signatory = ecrecover(digest, v, r, s);
+      require(signatory != address(0), "GovernorBravo::castVoteBySig: invalid signature");
+      emit VoteCast(signatory, proposalId, support, castVoteInternal(signatory, proposalId, support), "");
+    }
+```
+
+This is an external function that is used to cast a vote on a proposal using a signature. The function takes five arguments: proposalId, which is the ID of the proposal to vote on, support, which is a uint indicating whether the voter opposes (0), supports(1) or abstains(2) the proposal, v, r, and s, which are the components of the signature.
+
+The function first calculates the domainSeparator by hashing together the DOMAIN_TYPEHASH, the hash of the name of the contract, the getChainIdInternal function, and the address of the contract. It then calculates the structHash by hashing together the BALLOT_TYPEHASH, the proposalId, and the support value.
+
+It then calculates the digest by hashing together the prefix "\x19\x01", the domainSeparator, and the structHash, and recovers the address of the signer using the ecrecover function with digest and the v, r, and s components of the signature.
+
+If the recovered signatory address is not zero, the function emits a VoteCast event with the following parameters - signatory (the address of the voter who cast the vote), proposalId, support, castVoteInternal(signatory,proposalId, support), and "" (an empty string). Overall, the castVoteBySig function is a helper function that is used to cast a vote on a proposal using a signature. This can be useful for allowing users to cast votes without having to interact directly with the contract, and can help to improve the usability and accessibility of the Compound governance system.
+
+#### 2.13 castVoteInternal();
+
+```bash
+      function castVoteInternal(address voter, uint proposalId, uint8 support) internal returns (uint96) {
+        require(state(proposalId) == ProposalState.Active, "GovernorBravo::castVoteInternal: voting is closed");
+        require(support <= 2, "GovernorBravo::castVoteInternal: invalid vote type");
+        Proposal storage proposal = proposals[proposalId];
+        Receipt storage receipt = proposal.receipts[voter];
+        require(receipt.hasVoted == false, "GovernorBravo::castVoteInternal: voter already voted");
+        uint96 votes = comp.getPriorVotes(voter, proposal.startBlock);
+
+        if (support == 0) {
+            proposal.againstVotes = add256(proposal.againstVotes, votes);
+        } else if (support == 1) {
+            proposal.forVotes = add256(proposal.forVotes, votes);
+        } else if (support == 2) {
+            proposal.abstainVotes = add256(proposal.abstainVotes, votes);
+        }
+
+        receipt.hasVoted = true;
+        receipt.support = support;
+        receipt.votes = votes;
+
+        return votes;
+    }
+```
+
+This is an internal function that is used to cast a vote on a proposal. The function takes three arguments: voter, which is the address of the voter who is casting the vote, proposalId, which is the ID of the proposal to vote on, and support, which is a uint indicating whether the voter opposes (0), supports(1) or abstains(2) the proposal. The function first checks that the proposal is in the Active state, meaning that voting is currently open for the proposal. It then checks that the support value is valid (i.e. 0, 1, or 2).
+
+The function retrieves the Proposal struct for the specified proposalId from the proposals mapping, and then retrieves the Receipt struct for the specified voter from the receipts mapping of the proposal. The function then checks that the voter has not already voted on the proposal. It then calculates the votes that the voter has cast by calling the getPriorVotes function with the voter and proposal.startBlock as arguments.
+
+If the support value is 0, the function adds the votes to the proposal.againstVotes value. If the support value is 1, the function adds the votes to the proposal.forVotes value. If the support value is 2, the function adds the votes to the proposal.abstainVotes value. The function then sets the receipt.hasVoted value to true, and the receipt.support value to the support value. The receipt.votes value is set to the votes value. Finally, function returns the votes value.
+
+#### 2.14 isWhitelisted();
+
+```bash
+   function isWhitelisted(address account) public view returns (bool) {
+        return (whitelistAccountExpirations[account] > now);
+    }
+```
+
+The isWhitelisted function is a public view function that checks whether an account is currently whitelisted. The function takes one argument: account, which is the address of the account to check.
+
+The function returns a boolean value indicating whether the account is currently whitelisted. It does this by checking whether the value stored in the whitelistAccountExpirations mapping for the specified account is greater than the current time (now). If the value is greater than now, then the account is considered to be whitelisted and the function returns true. Otherwise, the account is considered to be not whitelisted and the function returns false.
+
+Overall, the isWhitelisted function is a helper function that is used to check whether an account is currently whitelisted. This can be useful for enforcing access control and ensuring that only authorized accounts are able to perform certain actions in the system.
+
+#### 2.15 \_setVotingDelay();
+
+```bash
+  function _setVotingDelay(uint newVotingDelay) external {
+        require(msg.sender == admin, "GovernorBravo::_setVotingDelay: admin only");
+        require(newVotingDelay >= MIN_VOTING_DELAY && newVotingDelay <= MAX_VOTING_DELAY, "GovernorBravo::_setVotingDelay: invalid voting delay");
+        uint oldVotingDelay = votingDelay;
+        votingDelay = newVotingDelay;
+
+        emit VotingDelaySet(oldVotingDelay,votingDelay);
+    }
+```
+
+The \_setVotingDelay function is used to set the voting delay for proposals, and takes in one argument: newVotingDelay. It requires the caller to be the admin address and the new voting delay to be within a valid range. It updates the votingDelay variable and emits a VotingDelaySet event with the old and new voting delay values.
+
+#### 2.16 \_setVotingPeriod();
+
+```bash
+      function _setVotingPeriod(uint newVotingPeriod) external {
+        require(msg.sender == admin, "GovernorBravo::_setVotingPeriod: admin only");
+        require(newVotingPeriod >= MIN_VOTING_PERIOD && newVotingPeriod <= MAX_VOTING_PERIOD, "GovernorBravo::_setVotingPeriod: invalid voting period");
+        uint oldVotingPeriod = votingPeriod;
+        votingPeriod = newVotingPeriod;
+
+        emit VotingPeriodSet(oldVotingPeriod, votingPeriod);
+    }
+```
+
+The \_setVotingPeriod function is used to set the voting period for proposals, and takes in one argument: newVotingPeriod. It requires the caller to be the admin address and the new voting period to be within a valid range. It updates the votingPeriod variable and emits a VotingPeriodSet event with the old and new voting period values.
+
+#### 2.17 \_setProposalThreshold();
+
+```bash
+  function _setProposalThreshold(uint newProposalThreshold) external {
+        require(msg.sender == admin, "GovernorBravo::_setProposalThreshold: admin only");
+        require(newProposalThreshold >= MIN_PROPOSAL_THRESHOLD && newProposalThreshold <= MAX_PROPOSAL_THRESHOLD, "GovernorBravo::_setProposalThreshold: invalid proposal threshold");
+        uint oldProposalThreshold = proposalThreshold;
+        proposalThreshold = newProposalThreshold;
+
+        emit ProposalThresholdSet(oldProposalThreshold, proposalThreshold);
+    }
+```
+
+The \_setProposalThreshold function is used to set the proposal threshold for proposals, and takes in one argument: newProposalThreshold. It requires the caller to be the admin address and the new proposal threshold to be within a valid range. It updates the proposalThreshold variable and emits a ProposalThresholdSet event with the old and new proposal threshold values.
+
+#### 2.18 \_setWhitelistAccountExpiration();
+
+```bash
+      function _setWhitelistAccountExpiration(address account, uint expiration) external {
+        require(msg.sender == admin || msg.sender == whitelistGuardian, "GovernorBravo::_setWhitelistAccountExpiration: admin only");
+        whitelistAccountExpirations[account] = expiration;
+
+        emit WhitelistAccountExpirationSet(account, expiration);
+    }
+```
+
+The \_setWhitelistAccountExpiration function is used to set the expiration for a whitelisted account, and takes in two arguments: account and expiration. It requires the caller to be the admin address or the whitelistGuardian address. It updates the value stored in the whitelistAccountExpirations mapping for the specified account to the specified expiration value and emits a WhitelistAccountExpirationSet event with the account and expiration values.
+
+#### 2.19 \_setWhitelistGuardian();
+
+```bash
+     function _setWhitelistGuardian(address account) external {
+        require(msg.sender == admin, "GovernorBravo::_setWhitelistGuardian: admin only");
+        address oldGuardian = whitelistGuardian;
+        whitelistGuardian = account;
+
+        emit WhitelistGuardianSet(oldGuardian, whitelistGuardian);
+     }
+```
+
+The \_setWhitelistGuardian function is used to set the whitelist guardian address, and takes in one argument: account. It requires the caller to be the admin address. It updates the value of the whitelistGuardian variable and emits a WhitelistGuardianSet event with the old and new whitelist guardian values.
+
+#### 2.20 \_initiate();
+
+```bash
+      function _initiate(address governorAlpha) external {
+        require(msg.sender == admin, "GovernorBravo::_initiate: admin only");
+        require(initialProposalId == 0, "GovernorBravo::_initiate: can only initiate once");
+        proposalCount = GovernorAlpha(governorAlpha).proposalCount();
+        initialProposalId = proposalCount;
+        timelock.acceptAdmin();
+    }
+```
+
+The \_initiate function is used to initiate the GovernorBravo contract, and takes in one argument: governorAlpha. It requires the caller to be the admin address, and ensures the initialProposalId variable is set to 0, which indicates that the contract has not yet been initiated. It then calls the acceptAdmin function on the timelock contract to accept the admin role. It then updates the proposalCount variable to the current proposal count of the governorAlpha contract and the initialProposalId variable to the current proposal count.
+
+The function then sets the proposalCount value to the proposalCount value of the governorAlpha contract and sets the initialProposalId value to the proposalCount value. Finally, the function calls the acceptAdmin function of the timelock contract.
+
+#### 2.21 \_setPendingAdmin();
+
+```bash
+      function _setPendingAdmin(address newPendingAdmin) external {
+        require(msg.sender == admin, "GovernorBravo:_setPendingAdmin: admin only");
+
+        address oldPendingAdmin = pendingAdmin;
+
+        pendingAdmin = newPendingAdmin;
+
+        emit NewPendingAdmin(oldPendingAdmin, newPendingAdmin);
+    }
+```
+
+The \_setPendingAdmin function is used to set the pending admin address, and takes in one argument: newPendingAdmin. It requires the caller to be the admin address, saves the current value of the pendingAdmin variable in the oldPendingAdmin variable for inclusion in the log and updates the pendingAdmin variable to the newPendingAdmin value. It then emits a NewPendingAdmin event with the old and new pending admin values. This can be useful for transferring the admin role to a new address, which can help to ensure the ongoing maintenance and security of the contract.
+
+#### 2.22 \_acceptPendingAdmin();
+
+```bash
+    function _acceptAdmin() external {
+        require(msg.sender == pendingAdmin && msg.sender != address(0), "GovernorBravo:_acceptAdmin: pending admin only");
+
+        address oldAdmin = admin;
+        address oldPendingAdmin = pendingAdmin;
+
+        admin = pendingAdmin;
+
+        pendingAdmin = address(0);
+
+        emit NewAdmin(oldAdmin, admin);
+        emit NewPendingAdmin(oldPendingAdmin, pendingAdmin);
+    }
+```
+
+The \_acceptPendingAdmin function is used to accept the pending admin address, and takes no arguments. It ensures the caller is the pending admin address and is not the zero address. It saves the current value of the admin and pendingAdmin variables in the oldAdmin and oldPendingAdmin variables for inclusion in the log, and updates the admin and pendingAdmin variables to the pendingAdmin value. It clears the pendingAdmin variable, and then emits a NewAdmin and NewPendingAdmin event with the old and new admin and pending admin values.
+
+#### 2.23 add256();
+
+```bash
+    function add256(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        require(c >= a, "GovernorBravo::add256: addition overflow");
+        return c;
+    }
+```
+
+The add256 function takes two uint256 arguments (a and b) and returns their sum as a uint. It first adds the two arguments together and stores the result in a new variable c. It then checks that the result is greater than or equal to the original value of a, and reverts with an error message if it is not. Finally, it returns the sum c.
+
+#### 2.24 sub256();
+
+```bash
+    function sub256(uint256 a, uint256 b) internal pure returns (uint) {
+    require(b <= a, "subtraction underflow");
+    return a - b;
+    }
+```
+
+The sub256 function takes two uint256 arguments (a and b) and returns their difference as a uint. It first checks that b is less than or equal to a, and reverts with an error message if it is not. It then subtracts the b from the first and returns the result.
+
+#### 2.24 getChainIdInternal();
+
+```bash
+    function getChainIdInternal() internal pure returns (uint) {
+        uint chainId;
+        assembly { chainId := chainid() }
+        return chainId;
+    }
+```
+
+The getChainIdInternal function returns the current chain ID as a uint. It does this by using inline assembly to call the chainid() opcode, which returns the current chain ID.
