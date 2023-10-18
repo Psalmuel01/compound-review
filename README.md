@@ -10,7 +10,7 @@
 
 ## Table of contents
 
-- <a href="#dsds"> 1. INTRODUCTION</a>
+- <a href="#intro"> 1. INTRODUCTION</a>
 
   - <a href="#Disclaim"> 1.1 Disclaimer</a>
   - <a href="#About"> 1.2 About Me </a>
@@ -23,19 +23,16 @@
   - <a href="#overview"> 1.9 System Overview</a>
 
 - <a href="#review"> 2.0 CONTRACT REVIEW</a>
-<!-- - <a href="#findings"> 3.0 FINDINGS</a>
-  - <a href="#summary"> 3.1 Summary</a>
-  - <a href="#Qanalysis"> 3.2 Qualitative Analysis</a>
-  - <a href="#keyF"> 3.3 Key Findings</a>
-- <a href="#Dresult"> 4.0 DETAILED RESULT</a>
-  - <a href="#dr1"> 4.1 Missing address(0) check in constructor</a>
-  - <a href="#dr2"> 4.2 Function claim() reverts without a specific pointer</a>
-  - <a href="#dr3"> 4.3 BetBull/ BetBear Epoch errors could be more specific</a>
-  - <a href="#dr4"> 4.4 Redundant State/ code removal in BetBear/BetBull</a>
-  - <a href="#dr5"> 4.5 Redundant State/ code removal in Claim() function </a>
-- <a href="#conclusion"> 5.0 CONCLUSION</a> -->
 
-<h2 id="dsds">1.0 INTRODUCTION </h2>
+- <a href="#findings"> 3.0 FINDINGS</a>
+
+  - <a href="#Qanalysis"> 3.1 Qualitative Analysis</a>
+  - <a href="#summary"> 3.2 Summarys</a>
+  - <a href="#recom"> 3.2 Recommendations</a>
+
+- <a href="#conclusion"> 4.0 CONCLUSION</a>
+
+<h2 id="intro">1.0 INTRODUCTION </h2>
 
 ### <h3 id="Disclaim">1.1 Disclaimer <h3>
 
@@ -704,3 +701,38 @@ The sub256 function takes two uint256 arguments (a and b) and returns their diff
 ```
 
 The getChainIdInternal function returns the current chain ID as a uint. It does this by using inline assembly to call the chainid() opcode, which returns the current chain ID.
+
+## <h2 id="findings">3.0 FINDINGS </h2>
+
+### <h3 id="Qanalysis"> 3.1 Qualitative Analysis<h3>
+
+_(**Table: 3.1**: GovernorBravoDelegate G2 Qualitative Analysis)_
+| Metric | Rating | Comment |
+| :-------- | :------- | :----- |
+| Code Complexity | Excellent | Functionality is very simple and organized |
+| Documentation | Moderate | Documentation could be improved |
+| Best Practices | Moderate | Some best practices were implemented but also found lacking in certain areas |
+
+### <h3 id="summary">3.2 Summary<h3>
+
+In summary, the code appears to be well-structured and follows best practices for a Solidity smart contract. It includes essential functions for proposal creation, voting, and execution in a decentralized governance system. The code uses appropriate validation checks to ensure the integrity and security of the proposals. However, as with any code, continuous monitoring, testing, and potential optimizations are recommended to maintain its efficiency and reliability.
+
+### <h3 id="recom">3.2 Recommendations<h3>
+
+Consider using the SafeMath library to ensure safe arithmetic operations to prevent overflow/underflow, instead of manually checking for overflow/underflow.
+
+```bash
+    using SafeMath for uint256;
+
+// Use like this: a.add(b) instead of a + b
+```
+
+## <h2 id="conclusion">4.0 CONCLUSION </h2>
+
+In this audit, I have thoroughly examined the "GovernorBravoDelegate" Solidity smart contract, focusing on its design and implementation. "GovernorBravoDelegate" is a critical component for decentralized governance within a blockchain-based application. It facilitates proposal creation, voting, execution, and administrative actions, essential for effective decentralized decision-making.
+
+The code is well-organized, following established best practices in Solidity development. It demonstrates a robust approach to decentralized governance and aligns with the principles of secure and efficient smart contract programming. The contract incorporates necessary validation checks to ensure the integrity and security of the governance processes.
+
+However, considering the evolving nature of blockchain technology and smart contract security, continued testing, auditing, and potential updates are recommended to maintain and enhance the contract's reliability and functionality.
+
+Overall, the "GovernorBravoDelegate" contract presents a solid foundation for decentralized governance, contributing positively to the broader blockchain ecosystem. The identified suggestions can be valuable for refining the contract and informing future implementations in a more efficient and maintainable manner.
